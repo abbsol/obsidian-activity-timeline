@@ -1,6 +1,6 @@
 import { DataAdapter, FileSystemAdapter, Notice, Plugin } from "obsidian";
 import { buildEvents, ClassifyContext } from "./classify";
-import { gitHeadText, headCommitTime, importGitHistory, isGitRepo, setGitBinary, workingTreeChanges } from "./git";
+import { gitFetch, gitHeadText, headCommitTime, importGitHistory, isGitRepo, setGitBinary, workingTreeChanges } from "./git";
 import { lineDiff } from "./linediff";
 import { LiveRecorder } from "./live";
 import { ActivityTimelineSettingTab } from "./settings";
@@ -67,7 +67,7 @@ export default class ActivityTimelinePlugin extends Plugin {
 			baseline: (path) => {
 				const cwd = this.basePath();
 				const fresh = Date.now() - this.headTs < FRESH_HEAD_MS;
-				return this.gitReady && cwd && fresh ? gitHeadText(cwd, path) : Promise.resolve(null);
+				return this.gitReady && cwd && fresh ? gitHeadText(cwd, path, this.settings.gitRef) : Promise.resolve(null);
 			},
 		}).register();
 
@@ -147,12 +147,14 @@ export default class ActivityTimelinePlugin extends Plugin {
 
 		this.importing = true;
 		try {
+			if (this.settings.gitFetch && !(await gitFetch(cwd)) && manual) new Notice("Git fetch failed, using what is already downloaded");
 			const result = await importGitHistory({
 				cwd,
 				sinceMs,
 				ctx: this.classifyContext(),
 				maxFilesPerCommit: this.settings.gitMaxFilesPerCommit,
 				store: this.store,
+				ref: this.settings.gitRef,
 			});
 			if (result.lastTs > this.settings.gitImportedUntil) {
 				this.settings.gitImportedUntil = result.lastTs;
@@ -161,7 +163,7 @@ export default class ActivityTimelinePlugin extends Plugin {
 				this.settings.gitImportedUntil = Date.now();
 				await this.saveSettings();
 			}
-			this.headTs = await headCommitTime(cwd);
+			this.headTs = await headCommitTime(cwd, this.settings.gitRef);
 			const fromFiles = await this.syncWorkingTree(cwd);
 			if (first || manual) {
 				const extra = fromFiles > 0 ? ` and ${fromFiles} from changes newer than the last commit` : "";
@@ -186,7 +188,7 @@ export default class ActivityTimelinePlugin extends Plugin {
 		const minTs = Date.now() - this.settings.gitBackfillDays * DAY_MS;
 		const events: ActivityEvent[] = [];
 		try {
-			const { changed, untracked } = await workingTreeChanges(cwd, ctx.extensions);
+			const { changed, untracked } = await workingTreeChanges(cwd, ctx.extensions, this.settings.gitRef);
 			for (const f of changed) {
 				const file = vault.getFileByPath(f.path);
 				if (!file || file.stat.mtime < minTs) continue;

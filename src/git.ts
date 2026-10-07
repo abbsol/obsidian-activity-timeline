@@ -13,6 +13,12 @@ export function setGitBinary(path: string): void {
 	gitBinary = path.trim() || "git";
 }
 
+/** Refs come from settings and end up on a command line, so keep them to ref-like characters. */
+export function safeRef(ref: string): string {
+	const r = ref.trim();
+	return /^[\w][\w./@{}~^-]*$/.test(r) ? r : "HEAD";
+}
+
 /** GUI apps on macOS start with a minimal PATH that lacks Homebrew. */
 function gitEnv(): NodeJS.ProcessEnv {
 	const extra = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin"];
@@ -165,11 +171,11 @@ export function isGitRepo(cwd: string): Promise<boolean> {
 }
 
 /** The last committed text of a file, or `null` if it is not tracked yet. */
-export function gitHeadText(cwd: string, path: string): Promise<string | null> {
+export function gitHeadText(cwd: string, path: string, ref = "HEAD"): Promise<string | null> {
 	return new Promise((resolve) => {
 		execFile(
 			gitBinary,
-			["show", `HEAD:./${path}`],
+			["show", `${safeRef(ref)}:./${path}`],
 			{ cwd, env: gitEnv(), maxBuffer: 8 * 1024 * 1024, encoding: "utf8" },
 			(err, stdout) => resolve(err ? null : stdout),
 		);
@@ -217,6 +223,7 @@ export async function importGitHistory(opts: {
 	ctx: ClassifyContext;
 	maxFilesPerCommit: number;
 	store: EventStore;
+	ref: string;
 }): Promise<ImportResult> {
 	const { cwd, sinceMs, ctx, maxFilesPerCommit, store } = opts;
 	const result: ImportResult = { commits: 0, events: 0, skippedCommits: 0, lastTs: 0 };
@@ -254,6 +261,7 @@ export async function importGitHistory(opts: {
 			"-U0",
 			"--relative",
 			`--format=${COMMIT_MARKER}%x09%H%x09%ct`,
+			safeRef(opts.ref),
 			"--",
 			...pathspecsFor(ctx.extensions),
 		],
@@ -265,10 +273,17 @@ export async function importGitHistory(opts: {
 	return result;
 }
 
-/** Commit time of HEAD in ms, or 0 when there are no commits. */
-export function headCommitTime(cwd: string): Promise<number> {
+/** Updates remote refs. Slow and network-bound, so it is opt-in and time-limited. */
+export function gitFetch(cwd: string): Promise<boolean> {
 	return new Promise((resolve) => {
-		execFile(gitBinary, ["log", "-1", "--format=%ct"], { cwd, env: gitEnv() }, (err, stdout) => {
+		execFile(gitBinary, ["fetch", "--quiet", "--no-tags"], { cwd, env: gitEnv(), timeout: 60_000 }, (err) => resolve(!err));
+	});
+}
+
+/** Commit time of HEAD in ms, or 0 when there are no commits. */
+export function headCommitTime(cwd: string, ref = "HEAD"): Promise<number> {
+	return new Promise((resolve) => {
+		execFile(gitBinary, ["log", "-1", "--format=%ct", safeRef(ref)], { cwd, env: gitEnv() }, (err, stdout) => {
 			const n = Number(stdout.trim());
 			resolve(err || !Number.isFinite(n) ? 0 : n * 1000);
 		});
@@ -286,24 +301,31 @@ export interface WorkingTreeChanges {
  * Everything that differs from HEAD right now. When the repository is behind the vault
  * (for example `.git` is not synced between machines), this is how recent activity is found.
  */
-export async function workingTreeChanges(cwd: string, extensions: string[]): Promise<WorkingTreeChanges> {
+export async function workingTreeChanges(cwd: string, extensions: string[], ref = "HEAD"): Promise<WorkingTreeChanges> {
 	const specs = pathspecsFor(extensions);
 	const changed: ParsedFile[] = [];
 	const parser = new GitLogParser((c) => changed.push(...c.files.filter((f) => !f.deleted)), Number.MAX_SAFE_INTEGER);
 	parser.push(`${COMMIT_MARKER}\tworktree\t0`);
 	await streamGit(
-		["-c", "core.quotepath=false", "diff", "HEAD", "--no-color", "--no-ext-diff", "-M", "-U0", "--relative", "--", ...specs],
+		["-c", "core.quotepath=false", "diff", safeRef(ref), "--no-color", "--no-ext-diff", "-M", "-U0", "--relative", "--", ...specs],
 		cwd,
 		(line) => parser.push(line),
 	);
 	parser.end();
 
+	// "Untracked" is judged against the index, which can be behind the ref we read history from.
+	// Anything already in that ref's tree is covered by its commits.
+	const inRef = new Set<string>();
+	// ls-tree takes literal paths, not globs, so list everything and keep it all
+	await streamGit(["-c", "core.quotepath=false", "ls-tree", "-r", "--name-only", safeRef(ref)], cwd, (line) => {
+		if (line) inRef.add(line);
+	});
 	const untracked: string[] = [];
 	await streamGit(
 		["-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "--", ...specs],
 		cwd,
 		(line) => {
-			if (line) untracked.push(line);
+			if (line && !inRef.has(line)) untracked.push(line);
 		},
 	);
 	return { changed, untracked };

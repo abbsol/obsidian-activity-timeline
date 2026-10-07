@@ -7,7 +7,8 @@ import type { ActivitySettings } from "./types";
 const MAX_WAIT_MS = 10 * 60_000;
 const MAX_PENDING = 500;
 const MAX_SNAPSHOT_FILE_BYTES = 1_000_000;
-const MAX_SNAPSHOT_TOTAL_BYTES = 30_000_000;
+const MAX_SNAPSHOT_TOTAL_BYTES = 80_000_000;
+const PRELOAD_BATCH = 40;
 
 interface Pending {
 	created: boolean;
@@ -48,8 +49,23 @@ export class LiveRecorder {
 			);
 			const active = workspace.getActiveFile();
 			if (active) void this.snapshot(active);
+			void this.preload();
 		});
 		this.plugin.register(() => this.flushAll());
+	}
+
+	/**
+	 * Reads every note once, in small batches, so the first change to any of them
+	 * can be diffed. Files changed by sync tools while Obsidian runs are never opened by the user.
+	 */
+	private async preload(): Promise<void> {
+		if (!this.deps.settings().preloadNotes) return;
+		const files = this.plugin.app.vault.getMarkdownFiles().sort((a, b) => b.stat.mtime - a.stat.mtime);
+		for (let i = 0; i < files.length; i += PRELOAD_BATCH) {
+			if (this.snapshotBytes > MAX_SNAPSHOT_TOTAL_BYTES * 0.9) return;
+			await Promise.all(files.slice(i, i + PRELOAD_BATCH).map((f) => this.snapshot(f)));
+			await new Promise((r) => window.setTimeout(r, 0));
+		}
 	}
 
 	private touch(file: TAbstractFile, created: boolean): void {

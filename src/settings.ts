@@ -23,6 +23,18 @@ export class ActivityTimelineSettingTab extends PluginSettingTab {
 		new Setting(containerEl).setName("Recording").setHeading();
 
 		new Setting(containerEl)
+			.setName("Keep notes in memory")
+			.setDesc(
+				"Reads notes at startup so changes made by sync tools or scripts can show what changed. Uses memory roughly equal to the size of your notes, up to 80 MB.",
+			)
+			.addToggle((t) =>
+				t.setValue(s.preloadNotes).onChange((v) => {
+					s.preloadNotes = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl)
 			.setName("Group edits within")
 			.setDesc("Seconds of quiet after the last keystroke before an edit is recorded.")
 			.addText((t) =>
@@ -131,6 +143,32 @@ export class ActivityTimelineSettingTab extends PluginSettingTab {
 			.addToggle((t) =>
 				t.setValue(s.gitEnabled).onChange((v) => {
 					s.gitEnabled = v;
+					save();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("History source")
+			.setDesc(
+				"Branch or ref to read history from. Use origin/main if this copy of the vault is not committed to locally but is backed up to a remote.",
+			)
+			.addText((t) =>
+				t
+					.setPlaceholder("HEAD")
+					.setValue(s.gitRef)
+					.onChange((v) => {
+						s.gitRef = v.trim() || "HEAD";
+						s.gitImportedUntil = 0;
+						save();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Fetch before importing")
+			.setDesc("Downloads new commits from the remote first. Needs network access and working git credentials.")
+			.addToggle((t) =>
+				t.setValue(s.gitFetch).onChange((v) => {
+					s.gitFetch = v;
 					save();
 				}),
 			);

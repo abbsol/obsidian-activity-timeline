@@ -53,9 +53,15 @@ export interface ActivitySettings {
 	captureRules: CaptureRule[];
 	gitEnabled: boolean;
 	gitPath: string;
+	/** Ref to read history from, for example HEAD or origin/main. */
+	gitRef: string;
+	/** Run `git fetch` before each import. */
+	gitFetch: boolean;
 	gitBackfillDays: number;
 	gitMaxFilesPerCommit: number;
 	weekStartsOnMonday: boolean;
+	/** Keep notes in memory so changes made outside the editor can be diffed. */
+	preloadNotes: boolean;
 	/** Commit time (ms) up to which git history has been imported. */
 	gitImportedUntil: number;
 }
@@ -68,9 +74,12 @@ export const DEFAULT_SETTINGS: ActivitySettings = {
 	captureRules: [],
 	gitEnabled: true,
 	gitPath: "git",
+	gitRef: "HEAD",
+	gitFetch: false,
 	gitBackfillDays: 365,
 	gitMaxFilesPerCommit: 300,
 	weekStartsOnMonday: true,
+	preloadNotes: true,
 	gitImportedUntil: 0,
 };
 
