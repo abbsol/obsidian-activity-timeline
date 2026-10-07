@@ -25,12 +25,12 @@ P.createSpan = function (o?: any) { return mk(this, "span", o); };
 const d = (day: number, h: number, m: number) => new Date(2026, 9, day, h, m).getTime();
 const base = { origin: "live" as const };
 const events: ActivityEvent[] = [
-	{ ...base, id: "1", ts: d(6, 9, 12), kind: "capture", source: "Raindrop", icon: "bookmark", path: "Raindrop/[note-name].md", title: "[Bookmark title]", excerpt: ["Highlighted excerpt from the page: the opening sentence of the clipped passage appears here as it was saved.", "A second line continues the excerpt, trimmed with an ellipsis if it runs long…"] },
-	{ ...base, id: "2", ts: d(6, 8, 40), kind: "task-completed", path: "Tasks/Open.md", title: "[Task title]", from: " ", to: "x" },
-	{ ...base, id: "3", ts: d(5, 17, 5), kind: "task-killed", path: "Tasks/Open.md", title: "[Task title]", from: " ", to: "-" },
-	{ ...base, id: "4", ts: d(5, 14, 20), kind: "capture", source: "MacWhisper", icon: "mic", path: "Transcripts/[file].md", title: "[Transcript title]" },
-	{ ...base, id: "5", ts: d(5, 11, 2), kind: "note-edited", path: "Wiki/[note].md", title: "[Note title]", changes: 7, excerpt: ["The first line of the edited section shows here, with the changed text visible in context.", "The second line follows, so you can recognise the note without opening it."] },
-	{ ...base, id: "6", ts: d(5, 10, 0), kind: "note-created", path: "Knowledge/New idea.md", title: "New idea", excerpt: ["A fresh note starts here."] },
+	{ ...base, id: "1", ts: d(6, 9, 12), kind: "capture", source: "Web clips", icon: "bookmark", path: "Web clips/How to write a good README.md", title: "How to write a good README", excerpt: ["A README should say what the project does, who it is for and how to start in under a minute.", "Show a screenshot early: people decide in the first screen."] },
+	{ ...base, id: "2", ts: d(6, 8, 40), kind: "task-completed", path: "Tasks/Work.md", title: "Send the quarterly report to finance", from: " ", to: "x", line: 14 },
+	{ ...base, id: "3", ts: d(5, 17, 5), kind: "task-killed", path: "Tasks/Work.md", title: "Rewrite the onboarding doc from scratch", from: " ", to: "-", line: 9 },
+	{ ...base, id: "4", ts: d(5, 14, 20), kind: "capture", source: "Meeting transcripts", icon: "mic", path: "Transcripts/2026-10-05 Weekly sync.md", title: "2026-10-05 Weekly sync", excerpt: ["Agreed to move the launch to the 19th.", "Open question: who owns the migration checklist?"] },
+	{ ...base, id: "5", ts: d(5, 11, 2), kind: "note-edited", path: "Notes/Reading list.md", title: "Reading list", changes: 7, excerpt: ["Finished chapter 4. The argument about sunk costs is the strongest part so far.", "Next: the case studies in chapter 5."] },
+	{ ...base, id: "6", ts: d(5, 10, 0), kind: "note-created", path: "Ideas/Weekly review template.md", title: "Weekly review template", excerpt: ["What moved forward this week?", "What got stuck, and why?"] },
 	{ ...base, id: "7", ts: d(4, 16, 0), kind: "file-changed", path: "Boards/Roadmap.canvas", title: "Roadmap", changes: 12 },
 ];
 // fake heat history
