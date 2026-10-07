@@ -38,8 +38,8 @@ A capture is a new note that arrives from somewhere else: a web clipper, a trans
 
 ## How it records
 
-- **Live:** the plugin watches vault events. Obsidian says a file changed but not what changed, so the plugin keeps a snapshot of notes you open and compares against it when your typing pauses. For notes it has not seen, it compares against the last committed version when the vault is a git repository.
-- **Git:** on start and every five minutes, new commits are read with `git log -p`. Commits touching more than 300 files (bulk imports, mass renames) are skipped. Renames without content changes are ignored.
+- **Live:** the plugin watches vault events. Obsidian says a file changed but not what changed, so the plugin keeps a copy of your notes in memory (read once at startup, about the size of your notes, capped at 80 MB) and compares against it when a change settles. This is also how changes made by sync tools and scripts get an excerpt. If a note is not in memory, the last committed version is used when it is recent.
+- **Git:** on start and every five minutes, new commits are read with `git log -p`. By default history comes from `HEAD`; set **History source** to `origin/main` (and turn on **Fetch before importing**) if this copy of the vault is not committed to locally but is backed up to a remote. Commits touching more than 300 files (bulk imports, mass renames) are skipped. Renames without content changes are ignored.
 - When both sources describe the same edit, the live one wins and the git one is dropped.
 
 Activity is stored in `events.jsonl` inside the plugin folder. It never leaves your machine. Add it to `.gitignore` if your vault is a repository and you auto-commit: it changes often.
@@ -48,7 +48,7 @@ Activity is stored in `events.jsonl` inside the plugin folder. It never leaves y
 
 - Desktop only (the git import needs the `git` program).
 - Without git, history starts the day you install the plugin.
-- Without git or an opened note, an edit is logged without the changed lines.
+- If the git history is behind the vault (for example `.git` is not synced between machines), files newer than the last commit are shown from their file dates, marked "from file dates", with one card per file.
 - Edits made by sync tools or scripts look the same as your own. The timeline is statistics for the whole vault.
 
 ## Installation
