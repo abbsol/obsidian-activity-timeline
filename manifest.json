@@ -1,7 +1,7 @@
 {
 	"id": "activity-timeline",
 	"name": "Activity Timeline",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"minAppVersion": "1.7.2",
 	"description": "Show a timeline of everything that happens in your vault: notes, tasks, captures and canvas files. Rebuilds past activity from git.",
 	"author": "Pavel Fedorov",
