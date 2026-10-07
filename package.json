@@ -1,6 +1,6 @@
 {
   "name": "obsidian-activity-timeline",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A timeline of everything that happens in your vault: notes created and edited, tasks completed and dropped, captures. Built from live events and git history.",
   "main": "main.js",
   "scripts": {

@@ -76,6 +76,13 @@ What to configure in **Settings → Activity Timeline**:
 
 If your vault is a git repository with automatic commits, add `.obsidian/plugins/activity-timeline/events.jsonl` to your `.gitignore`. The file changes often and can be rebuilt from git.
 
+## Disclosures
+
+- No account, no payment, no ads, no telemetry. Nothing is sent to the author or to any server run by the author.
+- **Network:** none by default. If you turn on **Fetch before importing**, the plugin runs `git fetch`, which contacts the remote you have configured for your repository (for example GitHub), using your own git credentials.
+- **Files outside the vault:** the plugin runs git inside your vault folder. If the vault sits inside a larger git repository, git reads that repository's `.git` folder, which is above the vault. Only files inside the vault folder are read for events.
+- The plugin is open source under the license below.
+
 ## Limits
 
 - Desktop only.
