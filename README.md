@@ -102,7 +102,7 @@ The plugin is released under the [BSD Zero Clause License](LICENSE): free for an
 Development:
 
 ```bash
-npm install --legacy-peer-deps
+npm install
 npm run dev      # watch build
 npm test
 npm run build
