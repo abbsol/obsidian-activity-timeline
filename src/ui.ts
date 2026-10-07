@@ -146,7 +146,7 @@ function renderMain(el: HTMLElement, vm: ViewModel, h: Handlers, icon: IconFn): 
 	head.createEl("h1", { cls: "at-title", text: "Activity timeline" });
 
 	const controls = head.createDiv({ cls: "at-controls" });
-	const seg = controls.createDiv({ cls: "at-seg", attr: { role: "group", "aria-label": "Period" } });
+	const seg = controls.createDiv({ cls: "at-seg", attr: { role: "group" } });
 	for (const [p, label] of PERIODS) {
 		const b = seg.createEl("button", { cls: "at-seg-btn", text: label });
 		if (p === vm.period) b.addClass("is-active");
@@ -166,7 +166,7 @@ function renderMain(el: HTMLElement, vm: ViewModel, h: Handlers, icon: IconFn): 
 	if (vm.isCurrent) today.setAttribute("disabled", "true");
 	today.addEventListener("click", () => h.goToday());
 
-	const chips = el.createDiv({ cls: "at-chips", attr: { role: "group", "aria-label": "Event type" } });
+	const chips = el.createDiv({ cls: "at-chips", attr: { role: "group" } });
 	for (const [g, label] of GROUPS) {
 		const c = chips.createEl("button", { cls: "at-chip", text: label });
 		if (g === vm.group) c.addClass("is-active");
@@ -206,7 +206,7 @@ function renderMain(el: HTMLElement, vm: ViewModel, h: Handlers, icon: IconFn): 
 function renderDay(list: HTMLElement, day: DayGroup, vm: ViewModel, h: Handlers, icon: IconFn): void {
 	const section = list.createDiv({ cls: "at-day" });
 	const head = section.createDiv({ cls: "at-day-head" });
-	head.createEl("strong", { text: formatDay(day.date) });
+	head.createSpan({ cls: "at-day-name", text: formatDay(day.date) });
 	head.createSpan({
 		cls: "at-day-meta",
 		text: day.key === vm.todayKey ? " · Today" : ` · ${plural(day.events.length, "event", "events")}`,
@@ -224,7 +224,7 @@ function renderEvent(section: HTMLElement, ev: ActivityEvent, h: Handlers, icon:
 
 	const card = item.createDiv({
 		cls: `at-card at-k-${ev.kind}`,
-		attr: { role: "button", tabindex: "0", "aria-label": `${kindLabel(ev)}: ${ev.title}` },
+		attr: { role: "button", tabindex: "0" },
 	});
 	card.createDiv({ cls: "at-card-label", text: kindLabel(ev) });
 	card.createDiv({ cls: "at-card-title", text: ev.title });
@@ -235,6 +235,7 @@ function renderEvent(section: HTMLElement, ev: ActivityEvent, h: Handlers, icon:
 		meta.push(`[${ev.from ?? " "}] → [${ev.to}]`);
 	}
 	if (ev.kind === "file-changed" && ev.changes) meta.push(plural(ev.changes, "change", "changes"));
+	if (ev.approx) meta.push("from file dates");
 	card.createDiv({ cls: "at-card-meta", text: meta.join(" · ") });
 
 	if (ev.excerpt && ev.excerpt.length > 0) {
@@ -254,14 +255,14 @@ function renderEvent(section: HTMLElement, ev: ActivityEvent, h: Handlers, icon:
 
 function renderSide(el: HTMLElement, vm: ViewModel, h: Handlers): void {
 	el.createDiv({ cls: "at-side-title", text: `Activity · last ${vm.heatWeeks} weeks` });
-	const grid = el.createDiv({ cls: "at-heat", attr: { role: "group", "aria-label": "Activity heatmap" } });
+	const grid = el.createDiv({ cls: "at-heat", attr: { role: "group" } });
 	grid.setCssProps({ "--at-heat-cols": String(vm.heat.length) });
 	for (const col of vm.heat) {
 		for (const cell of col) {
 			const label = `${formatFullDay(cell.date)}: ${plural(cell.count, "event", "events")}`;
 			const b = grid.createEl("button", {
 				cls: `at-cell at-l${cell.level}`,
-				attr: { "aria-label": label, title: label },
+				attr: { "aria-label": label },
 			});
 			if (cell.future) {
 				b.addClass("is-future");
@@ -285,7 +286,7 @@ function renderSide(el: HTMLElement, vm: ViewModel, h: Handlers): void {
 	}
 
 	el.createDiv({ cls: "at-side-title at-gap", text: "Folder" });
-	const select = el.createEl("select", { cls: "at-select dropdown", attr: { "aria-label": "Folder" } });
+	const select = el.createEl("select", { cls: "at-select dropdown" });
 	const options: FolderOption[] = [{ path: "", count: 0 }, ...vm.folders];
 	if (vm.folder && !vm.folders.some((f) => f.path === vm.folder)) options.push({ path: vm.folder, count: 0 });
 	for (const f of options) {

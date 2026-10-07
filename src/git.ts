@@ -184,7 +184,34 @@ export interface ImportResult {
 	lastTs: number;
 }
 
-export function importGitHistory(opts: {
+/** Runs git and feeds stdout to `onLine` line by line. Rejects on a non-zero exit. */
+function streamGit(args: string[], cwd: string, onLine: (line: string) => void): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const child = spawn(gitBinary, args, { cwd, env: gitEnv() });
+		let stderr = "";
+		child.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
+		const rl = createInterface({ input: child.stdout, crlfDelay: Infinity });
+		rl.on("line", onLine);
+		let exitCode: number | null | undefined;
+		let linesDone = false;
+		const settle = () => {
+			if (exitCode === undefined || !linesDone) return;
+			if (exitCode === 0) resolve();
+			else reject(new Error(stderr.trim() || `git exited with code ${String(exitCode)}`));
+		};
+		rl.on("close", () => {
+			linesDone = true;
+			settle();
+		});
+		child.on("error", reject);
+		child.on("close", (code) => {
+			exitCode = code;
+			settle();
+		});
+	});
+}
+
+export async function importGitHistory(opts: {
 	cwd: string;
 	sinceMs: number;
 	ctx: ClassifyContext;
@@ -192,29 +219,29 @@ export function importGitHistory(opts: {
 	store: EventStore;
 }): Promise<ImportResult> {
 	const { cwd, sinceMs, ctx, maxFilesPerCommit, store } = opts;
-	return new Promise((resolve, reject) => {
-		const result: ImportResult = { commits: 0, events: 0, skippedCommits: 0, lastTs: 0 };
-		const parser = new GitLogParser((commit) => {
-			result.commits++;
-			result.lastTs = Math.max(result.lastTs, commit.ts);
-			for (const f of commit.files) {
-				if (f.deleted) continue;
-				const events = buildEvents(
-					{
-						path: f.path,
-						ts: commit.ts,
-						created: f.created,
-						diff: { added: f.added, removed: f.removed },
-						origin: "git",
-						idSeed: `git:${commit.sha}`,
-					},
-					ctx,
-				);
-				result.events += store.add(events);
-			}
-		}, maxFilesPerCommit);
+	const result: ImportResult = { commits: 0, events: 0, skippedCommits: 0, lastTs: 0 };
+	const parser = new GitLogParser((commit) => {
+		result.commits++;
+		result.lastTs = Math.max(result.lastTs, commit.ts);
+		for (const f of commit.files) {
+			if (f.deleted) continue;
+			const events = buildEvents(
+				{
+					path: f.path,
+					ts: commit.ts,
+					created: f.created,
+					diff: { added: f.added, removed: f.removed },
+					origin: "git",
+					idSeed: `git:${commit.sha}`,
+				},
+				ctx,
+			);
+			result.events += store.add(events);
+		}
+	}, maxFilesPerCommit);
 
-		const args = [
+	await streamGit(
+		[
 			"-c",
 			"core.quotepath=false",
 			"log",
@@ -229,29 +256,55 @@ export function importGitHistory(opts: {
 			`--format=${COMMIT_MARKER}%x09%H%x09%ct`,
 			"--",
 			...pathspecsFor(ctx.extensions),
-		];
-		const child = spawn(gitBinary, args, { cwd, env: gitEnv() });
-		let stderr = "";
-		child.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
-		const rl = createInterface({ input: child.stdout, crlfDelay: Infinity });
-		rl.on("line", (line) => parser.push(line));
-		let exitCode: number | null | undefined;
-		let linesDone = false;
-		const settle = () => {
-			if (exitCode === undefined || !linesDone) return;
-			parser.end();
-			result.skippedCommits = parser.skippedCommits;
-			if (exitCode === 0) resolve(result);
-			else reject(new Error(stderr.trim() || `git exited with code ${String(exitCode)}`));
-		};
-		rl.on("close", () => {
-			linesDone = true;
-			settle();
-		});
-		child.on("error", reject);
-		child.on("close", (code) => {
-			exitCode = code;
-			settle();
+		],
+		cwd,
+		(line) => parser.push(line),
+	);
+	parser.end();
+	result.skippedCommits = parser.skippedCommits;
+	return result;
+}
+
+/** Commit time of HEAD in ms, or 0 when there are no commits. */
+export function headCommitTime(cwd: string): Promise<number> {
+	return new Promise((resolve) => {
+		execFile(gitBinary, ["log", "-1", "--format=%ct"], { cwd, env: gitEnv() }, (err, stdout) => {
+			const n = Number(stdout.trim());
+			resolve(err || !Number.isFinite(n) ? 0 : n * 1000);
 		});
 	});
+}
+
+export interface WorkingTreeChanges {
+	/** Tracked files that differ from HEAD (staged or not). */
+	changed: ParsedFile[];
+	/** Files git does not track and does not ignore. */
+	untracked: string[];
+}
+
+/**
+ * Everything that differs from HEAD right now. When the repository is behind the vault
+ * (for example `.git` is not synced between machines), this is how recent activity is found.
+ */
+export async function workingTreeChanges(cwd: string, extensions: string[]): Promise<WorkingTreeChanges> {
+	const specs = pathspecsFor(extensions);
+	const changed: ParsedFile[] = [];
+	const parser = new GitLogParser((c) => changed.push(...c.files.filter((f) => !f.deleted)), Number.MAX_SAFE_INTEGER);
+	parser.push(`${COMMIT_MARKER}\tworktree\t0`);
+	await streamGit(
+		["-c", "core.quotepath=false", "diff", "HEAD", "--no-color", "--no-ext-diff", "-M", "-U0", "--relative", "--", ...specs],
+		cwd,
+		(line) => parser.push(line),
+	);
+	parser.end();
+
+	const untracked: string[] = [];
+	await streamGit(
+		["-c", "core.quotepath=false", "ls-files", "--others", "--exclude-standard", "--", ...specs],
+		cwd,
+		(line) => {
+			if (line) untracked.push(line);
+		},
+	);
+	return { changed, untracked };
 }

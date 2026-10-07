@@ -33,6 +33,8 @@ export interface ActivityEvent {
 	to?: string;
 	/** For file-changed: the file was created, not edited. */
 	created?: boolean;
+	/** Reconstructed from file dates, not from a commit or a live edit. */
+	approx?: boolean;
 }
 
 export interface CaptureRule {

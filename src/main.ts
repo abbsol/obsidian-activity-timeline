@@ -1,14 +1,17 @@
 import { DataAdapter, FileSystemAdapter, Notice, Plugin } from "obsidian";
-import { ClassifyContext } from "./classify";
-import { gitHeadText, importGitHistory, isGitRepo, setGitBinary } from "./git";
+import { buildEvents, ClassifyContext } from "./classify";
+import { gitHeadText, headCommitTime, importGitHistory, isGitRepo, setGitBinary, workingTreeChanges } from "./git";
+import { lineDiff } from "./linediff";
 import { LiveRecorder } from "./live";
 import { ActivityTimelineSettingTab } from "./settings";
 import { EventStore, LogStorage } from "./store";
-import { ActivitySettings, DEFAULT_SETTINGS } from "./types";
+import { ActivityEvent, ActivitySettings, DEFAULT_SETTINGS } from "./types";
 import { TimelineView, VIEW_TYPE } from "./view";
 
 const DAY_MS = 86_400_000;
 const GIT_POLL_MS = 5 * 60_000;
+/** A committed baseline older than this is too far from the live text to diff against. */
+const FRESH_HEAD_MS = 2 * 3_600_000;
 
 class AdapterStorage implements LogStorage {
 	constructor(
@@ -36,6 +39,7 @@ export default class ActivityTimelinePlugin extends Plugin {
 	store!: EventStore;
 	gitReady = false;
 	private importing = false;
+	private headTs = 0;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -62,7 +66,8 @@ export default class ActivityTimelinePlugin extends Plugin {
 			context: () => this.classifyContext(),
 			baseline: (path) => {
 				const cwd = this.basePath();
-				return this.gitReady && cwd ? gitHeadText(cwd, path) : Promise.resolve(null);
+				const fresh = Date.now() - this.headTs < FRESH_HEAD_MS;
+				return this.gitReady && cwd && fresh ? gitHeadText(cwd, path) : Promise.resolve(null);
 			},
 		}).register();
 
@@ -156,8 +161,11 @@ export default class ActivityTimelinePlugin extends Plugin {
 				this.settings.gitImportedUntil = Date.now();
 				await this.saveSettings();
 			}
+			this.headTs = await headCommitTime(cwd);
+			const fromFiles = await this.syncWorkingTree(cwd);
 			if (first || manual) {
-				new Notice(`Imported ${result.events} events from ${result.commits} commits`);
+				const extra = fromFiles > 0 ? ` and ${fromFiles} from changes newer than the last commit` : "";
+				new Notice(`Imported ${result.events} events from ${result.commits} commits${extra}`);
 			}
 		} catch (err) {
 			console.error("Activity timeline: git import failed", err);
@@ -165,6 +173,50 @@ export default class ActivityTimelinePlugin extends Plugin {
 		} finally {
 			this.importing = false;
 		}
+	}
+
+	/**
+	 * Files that differ from HEAD. Normally these are fresh edits waiting for the next commit,
+	 * but when the repository is behind the vault they are the only trace of recent activity.
+	 * Time comes from file dates, so these events are marked approximate.
+	 */
+	private async syncWorkingTree(cwd: string): Promise<number> {
+		const { vault } = this.app;
+		const ctx = this.classifyContext();
+		const minTs = Date.now() - this.settings.gitBackfillDays * DAY_MS;
+		const events: ActivityEvent[] = [];
+		try {
+			const { changed, untracked } = await workingTreeChanges(cwd, ctx.extensions);
+			for (const f of changed) {
+				const file = vault.getFileByPath(f.path);
+				if (!file || file.stat.mtime < minTs) continue;
+				const ts = file.stat.mtime;
+				events.push(
+					...buildEvents(
+						{ path: f.path, ts, created: f.created, diff: { added: f.added, removed: f.removed }, origin: "git", idSeed: `wt:${ts}` },
+						ctx,
+					),
+				);
+			}
+			for (const path of untracked) {
+				const file = vault.getFileByPath(path);
+				if (!file || file.stat.ctime < minTs) continue;
+				const text = await vault.cachedRead(file).catch(() => null);
+				if (text === null) continue;
+				const ts = file.stat.ctime;
+				events.push(
+					...buildEvents(
+						{ path, ts, created: true, diff: lineDiff(null, text), origin: "git", idSeed: `wt:${ts}` },
+						ctx,
+					),
+				);
+			}
+		} catch (err) {
+			console.error("Activity timeline: working tree scan failed", err);
+			return 0;
+		}
+		for (const e of events) e.approx = true;
+		return this.store.syncGroup("wt:", events);
 	}
 
 	async clearLog(): Promise<void> {

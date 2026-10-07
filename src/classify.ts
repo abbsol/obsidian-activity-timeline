@@ -234,7 +234,7 @@ export function buildEvents(change: FileChange, ctx: ClassifyContext): ActivityE
 		seen.set(tr.task.key, n + 1);
 		events.push(
 			mk(tr.kind, `${tr.task.key}#${n}`, {
-				title: cleanInline(tr.task.body, 140),
+				title: cleanInline(tr.task.body, 140).replace(/^[\s✅✓✔☑\uFE0F]+/u, ""),
 				task: tr.task.key,
 				from: tr.from,
 				to: tr.task.status,

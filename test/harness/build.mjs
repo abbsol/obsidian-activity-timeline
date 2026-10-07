@@ -11,6 +11,9 @@ body.theme-light{--background-primary:#fff;--background-secondary:#f5f6f8;--back
 body{--font-monospace:"DejaVu Sans Mono",monospace;--font-ui-smaller:12px;--font-ui-small:13px;--font-ui-medium:15px}
 .svg-icon{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #wrap{height:100vh}
+button:not(.clickable-icon){background:#f4a460;color:#fff;border-radius:20px;padding:6px 14px;box-shadow:0 2px 4px #0006}
+select{background:#f4a460;color:#fff}
+strong{color:#4ade80}
 ${css}</style></head><body class="theme-${theme}"><div id="wrap" class="view-content at-view"><div id="root" class="at-root"></div></div><script src="harness.js"></script></body></html>`;
 writeFileSync(process.argv[2] + "/dark.html", page("dark"));
 writeFileSync(process.argv[2] + "/light.html", page("light"));

@@ -56,8 +56,10 @@ export class EventStore {
 			if (!line) continue;
 			this.lineCount++;
 			try {
-				const ev = JSON.parse(line) as ActivityEvent;
-				if (ev && typeof ev.id === "string" && typeof ev.ts === "number") this.index(ev);
+				const ev = JSON.parse(line) as ActivityEvent & { deleted?: boolean };
+				if (!ev || typeof ev.id !== "string") continue;
+				if (ev.deleted) this.unindex(ev.id);
+				else if (typeof ev.ts === "number") this.index(ev);
 			} catch {
 				// a torn last line after a crash is not worth failing the load
 			}
@@ -83,8 +85,50 @@ export class EventStore {
 		}
 	}
 
+	private unindex(id: string): boolean {
+		const ev = this.events.get(id);
+		if (!ev) return false;
+		this.events.delete(id);
+		this.sorted = null;
+		const list = this.byPath.get(ev.path);
+		if (list) {
+			const rest = list.filter((x) => x.id !== id);
+			if (rest.length > 0) this.byPath.set(ev.path, rest);
+			else this.byPath.delete(ev.path);
+		}
+		return true;
+	}
+
+	/**
+	 * Makes the stored events whose id starts with `prefix` equal to `events`:
+	 * stale ones are removed, missing ones added, unchanged ones are not rewritten.
+	 */
+	syncGroup(prefix: string, events: ActivityEvent[]): number {
+		const keep = new Set(events.map((e) => e.id));
+		let changed = 0;
+		for (const id of [...this.events.keys()]) {
+			if (id.startsWith(prefix) && !keep.has(id)) {
+				this.unindex(id);
+				this.persistLine(JSON.stringify({ id, deleted: true }));
+				changed++;
+			}
+		}
+		for (const ev of events) {
+			if (this.events.has(ev.id) || this.coveredByLive(ev)) continue;
+			this.index(ev);
+			this.persist(ev);
+			changed++;
+		}
+		if (changed > 0) this.emit();
+		return changed;
+	}
+
 	private persist(ev: ActivityEvent): void {
-		this.pendingLines.push(JSON.stringify(ev));
+		this.persistLine(JSON.stringify(ev));
+	}
+
+	private persistLine(line: string): void {
+		this.pendingLines.push(line);
 		this.lineCount++;
 		this.flushing = this.flushing.then(() => this.flush());
 	}
@@ -148,7 +192,7 @@ export class EventStore {
 		for (const ev of events) {
 			if (this.events.has(ev.id)) continue;
 			if (ev.origin === "git" && this.coveredByLive(ev)) continue;
-			const merged = ev.kind === "note-edited" ? this.mergeEdit(ev) : null;
+			const merged = ev.kind === "note-edited" && !ev.approx ? this.mergeEdit(ev) : null;
 			const final = merged ?? ev;
 			this.index(final);
 			this.persist(final);
@@ -163,7 +207,7 @@ export class EventStore {
 		if (!list) return null;
 		let last: ActivityEvent | null = null;
 		for (const x of list) {
-			if (x.kind !== "note-edited") continue;
+			if (x.kind !== "note-edited" || x.approx) continue;
 			if (Math.abs(ev.ts - x.ts) > this.options.mergeMs) continue;
 			if (!last || x.ts > last.ts) last = x;
 		}
