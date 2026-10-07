@@ -1,0 +1,9 @@
+{
+  "id": "activity-timeline",
+  "name": "Activity Timeline",
+  "version": "0.1.0",
+  "minAppVersion": "1.7.2",
+  "description": "A timeline of everything that happens in your vault: notes, tasks, captures. Backfilled from git history.",
+  "author": "Pavel Fedorov",
+  "isDesktopOnly": true
+}
