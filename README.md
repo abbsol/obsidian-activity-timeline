@@ -1,5 +1,7 @@
 # Activity Timeline
 
+**English** · [Русский](README.ru.md)
+
 > **Credit.** This plugin is built on the idea and the mockup by [u/thecroissantproject](https://www.reddit.com/user/thecroissantproject/), from their post [Comprehensive historical timeline of my actions across Obsidian?](https://www.reddit.com/r/ObsidianMD/comments/1wz07ws/comprehensive_historical_timeline_of_my_actions/) on r/ObsidianMD. The design, the event types and the layout come from that mockup. I only wrote the code. I am not affiliated with them.
 
 A timeline of everything that happens in your vault: notes created and edited, tasks completed and dropped, things you captured. It shows what you actually did today, this week or this year.
